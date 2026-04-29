@@ -1,4 +1,3 @@
-// frontend/hooks/useVoiceAssistant.ts
 import { useState, useCallback, useEffect, useRef } from 'react';
 
 export type VoiceCommand = 
@@ -11,7 +10,12 @@ export type VoiceCommand =
   | 'set_reminder'
   | 'recommend_exercises'
   | 'help'
-  | 'turn_off';
+  | 'turn_off'
+  | 'go_to_analysis'
+  | 'go_to_exercises'
+  | 'go_to_sessions'
+  | 'go_to_reviews'
+  | 'go_to_profile';
 
 interface UseVoiceAssistantProps {
   onCommand: (command: VoiceCommand, details?: string) => void;
@@ -161,55 +165,113 @@ export const useVoiceAssistant = ({
       setIsProcessing(false);
     }, 1000);
     
-    // Короткие ответы для скорости
-    if (cmd.includes('калибр')) {
-      speakShort('Ок');
+    const lowerCmd = cmd.toLowerCase();
+    
+    // НАВИГАЦИОННЫЕ КОМАНДЫ (работают всегда)
+    if (lowerCmd.includes('перейти') || lowerCmd.includes('открыть') || lowerCmd.includes('покажи')) {
+      if (lowerCmd.includes('анализ') || lowerCmd.includes('главная') || lowerCmd.includes('осанку')) {
+        speakShort('Перехожу на страницу анализа');
+        executeCommand('go_to_analysis');
+        return;
+      }
+      else if (lowerCmd.includes('упражнени')) {
+        speakShort('Перехожу к упражнениям');
+        executeCommand('go_to_exercises');
+        return;
+      }
+      else if (lowerCmd.includes('статистик') || lowerCmd.includes('сеанс') || lowerCmd.includes('история')) {
+        speakShort('Перехожу к статистике');
+        executeCommand('go_to_sessions');
+        return;
+      }
+      else if (lowerCmd.includes('отзыв')) {
+        speakShort('Перехожу к отзывам');
+        executeCommand('go_to_reviews');
+        return;
+      }
+      else if (lowerCmd.includes('профиль') || lowerCmd.includes('настройк')) {
+        speakShort('Перехожу в профиль');
+        executeCommand('go_to_profile');
+        return;
+      }
+    }
+    
+    // ПРЯМЫЕ КОМАНДЫ ДЛЯ НАВИГАЦИИ
+    if (lowerCmd === 'анализ' || lowerCmd === 'осанка' || lowerCmd === 'главная') {
+      speakShort('Перехожу на страницу анализа');
+      executeCommand('go_to_analysis');
+      return;
+    }
+    else if (lowerCmd === 'упражнения') {
+      speakShort('Перехожу к упражнениям');
+      executeCommand('go_to_exercises');
+      return;
+    }
+    else if (lowerCmd === 'статистика' || lowerCmd === 'сеансы' || lowerCmd === 'история') {
+      speakShort('Перехожу к статистике');
+      executeCommand('go_to_sessions');
+      return;
+    }
+    else if (lowerCmd === 'отзывы') {
+      speakShort('Перехожу к отзывам');
+      executeCommand('go_to_reviews');
+      return;
+    }
+    else if (lowerCmd === 'профиль' || lowerCmd === 'настройки') {
+      speakShort('Перехожу в профиль');
+      executeCommand('go_to_profile');
+      return;
+    }
+    
+    // КОМАНДЫ ДЛЯ АНАЛИЗА ОСАНКИ
+    if (lowerCmd.includes('калибр')) {
+      speakShort('Запускаю калибровку');
       executeCommand('calibrate');
     }
-    else if (cmd.includes('осанк') || cmd.includes('поза')) {
-      speakShort('Проверяю');
+    else if (lowerCmd.includes('осанк') || lowerCmd.includes('поза') || lowerCmd.includes('как осанка')) {
+      speakShort('Проверяю осанку');
       executeCommand('check_posture');
     }
-    else if (cmd.includes('начать') || cmd.includes('старт')) {
+    else if ((lowerCmd.includes('начать') || lowerCmd.includes('старт')) && (lowerCmd.includes('анализ') || lowerCmd.includes('осанки'))) {
       if (isCalibratedRef.current) {
-        speakShort('Старт');
+        speakShort('Запускаю анализ');
         executeCommand('start_analysis');
       } else {
-        speakShort('Сначала калибровка');
+        speakShort('Сначала выполните калибровку');
       }
     }
-    else if (cmd.includes('стоп') || cmd.includes('закончи')) {
-      speakShort('Стоп');
+    else if ((lowerCmd.includes('стоп') || lowerCmd.includes('закончи') || lowerCmd.includes('останови')) && (lowerCmd.includes('анализ') || lowerCmd.includes('осанки'))) {
+      speakShort('Останавливаю анализ');
       executeCommand('stop_analysis');
     }
-    else if (cmd.includes('статистик')) {
-      speakShort('Статистика');
-      executeCommand('show_stats');
-    }
-    else if (cmd.includes('сброс')) {
-      speakShort('Сброс');
+    else if (lowerCmd.includes('сброс') && (lowerCmd.includes('калибр') || lowerCmd.includes('осанки'))) {
+      speakShort('Сбрасываю калибровку');
       executeCommand('reset_calibration');
     }
-    else if (cmd.includes('выключи') || cmd.includes('отключи')) {
-      speakShort('До свидания');
-      executeCommand('turn_off');
-      setTimeout(() => stopListening(), 300);
+    else if (lowerCmd.includes('статистик') && (lowerCmd.includes('осанки') || lowerCmd.includes('результат'))) {
+      speakShort('Показываю статистику');
+      executeCommand('show_stats');
     }
-    else if (cmd.includes('напомни')) {
+    else if (lowerCmd.includes('напомни')) {
       const match = cmd.match(/(\d+)/);
       if (match) {
-        speakShort(`Напомню через ${match[1]}`);
+        speakShort(`Напомню через ${match[1]} минут`);
         executeCommand('set_reminder', match[1]);
       } else {
-        speakShort('Время?');
+        speakShort('Скажите время в минутах');
       }
     }
-    else if (cmd.includes('упражн')) {
-      speakShort('Упражнения');
+    else if (lowerCmd.includes('упражнения') && (lowerCmd.includes('какие') || lowerCmd.includes('рекоменд'))) {
+      speakShort('Рекомендую упражнения для спины');
       executeCommand('recommend_exercises');
     }
-    else if (cmd.includes('помощь')) {
-      speakShort('Осанка, старт, стоп, статистика, калибровка, сброс, напомни, упражнения');
+    else if (lowerCmd.includes('помощь') || lowerCmd.includes('команды') || lowerCmd.includes('что умеешь')) {
+      speakShort('Команды: анализ, упражнения, статистика, отзывы, профиль, калибровка, осанка, начать анализ, стоп анализ, сброс, напомни, помощь, выключи');
+    }
+    else if (lowerCmd.includes('выключи') || lowerCmd.includes('отключи') || lowerCmd.includes('спасибо')) {
+      speakShort('До свидания');
+      executeCommand('turn_off');
+      setTimeout(() => stopListening(), 500);
     }
     else {
       isProcessingRef.current = false;
@@ -240,6 +302,7 @@ export const useVoiceAssistant = ({
     recognition.onstart = () => {
       setIsListening(true);
       setError(null);
+      console.log('🎤 Voice assistant listening...');
     };
     
     recognition.onresult = (event: any) => {
@@ -251,6 +314,7 @@ export const useVoiceAssistant = ({
       }
       
       if (finalText && finalText !== lastProcessedText) {
+        console.log('🎤 Heard:', finalText);
         lastProcessedText = finalText;
         
         if (processTimeout) clearTimeout(processTimeout);
@@ -270,6 +334,7 @@ export const useVoiceAssistant = ({
         setError('Нет доступа к микрофону');
         shouldKeepListeningRef.current = false;
       }
+      console.error('Speech recognition error:', event.error);
     };
     
     recognition.onend = () => {
@@ -295,10 +360,10 @@ export const useVoiceAssistant = ({
   const toggleListening = useCallback(() => {
     if (isListening) {
       stopListening();
-      speakShort('Пока');
+      speakShort('Голосовой ассистент выключен');
     } else {
       startListening();
-      speakShort('Слушаю');
+      speakShort('Скажите "Алиса" для активации');
     }
   }, [isListening, startListening, stopListening, speakShort]);
 

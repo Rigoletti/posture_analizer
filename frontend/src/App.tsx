@@ -5,6 +5,8 @@ import { useAuthStore } from './store/auth';
 import Header from './components/layout/Header';
 import { ProtectedRoute } from './components/ui/ProtectedRoute';
 import { ThemeProvider } from './theme/ThemeContext';
+import { GlobalVoiceProvider } from './context/GlobalVoiceContext';
+import { GlobalVoiceButton } from './components/ui/GlobalVoiceButton';
 import './App.css';
 
 // Ленивая загрузка страниц
@@ -127,120 +129,125 @@ function App() {
   return (
     <ThemeProvider>
       <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <div className="App">
-          <Header />
-          
-          <main>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                {/* Публичные маршруты */}
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/exercises" element={<Exercises />} />
-                <Route path="/exercises/:id" element={<ExerciseDetail />} />
-                <Route path="/verify-email" element={<VerifyCodePage />} />
-                <Route path="/pending-verification" element={<PendingVerificationPage />} />
-                <Route path="/yandex-callback" element={<YandexCallbackPage />} />
+        <GlobalVoiceProvider>
+          <div className="App">
+            <Header />
+            
+            <main>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  {/* Публичные маршруты */}
+                  <Route path="/" element={<Home />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/exercises" element={<Exercises />} />
+                  <Route path="/exercises/:id" element={<ExerciseDetail />} />
+                  <Route path="/verify-email" element={<VerifyCodePage />} />
+                  <Route path="/pending-verification" element={<PendingVerificationPage />} />
+                  <Route path="/yandex-callback" element={<YandexCallbackPage />} />
 
-                {/* Защищенные маршруты - только для авторизованных пользователей */}
-                <Route 
-                  path="/profile" 
-                  element={
-                    <ProtectedRoute requireAuth>
-                      <ProfilePage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/profile/edit" 
-                  element={
-                    <ProtectedRoute requireAuth>
-                      <ProfileEditPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/profile/security" 
-                  element={
-                    <ProtectedRoute requireAuth>
-                      <ProfileSecurityPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/profile/subscription" 
-                  element={
-                    <ProtectedRoute requireAuth>
-                      <SubscriptionInfo />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/profile/subscription/success" 
-                  element={
-                    <ProtectedRoute requireAuth>
-                      <SubscriptionSuccessPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/sessions" 
-                  element={
-                    <ProtectedRoute requireAuth>
-                      <SessionsHistory />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/sessions/:sessionId" 
-                  element={
-                    <ProtectedRoute requireAuth>
-                      <SessionDetailPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/reviews" 
-                  element={
-                    <ProtectedRoute requireAuth>
-                      <ReviewsPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                <Route 
-                  path="/reviews/:userId" 
-                  element={
-                    <ProtectedRoute requireAuth>
-                      <ReviewsPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* Админ маршруты - только для админов */}
-                <Route 
-                  path="/admin/*" 
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <AdminPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* Fallback route */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Suspense>
-          </main>
-        </div>
+                  {/* Защищенные маршруты - только для авторизованных пользователей */}
+                  <Route 
+                    path="/profile" 
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <ProfilePage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/profile/edit" 
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <ProfileEditPage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/profile/security" 
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <ProfileSecurityPage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/profile/subscription" 
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <SubscriptionInfo />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/profile/subscription/success" 
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <SubscriptionSuccessPage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/sessions" 
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <SessionsHistory />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/sessions/:sessionId" 
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <SessionDetailPage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/reviews" 
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <ReviewsPage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  <Route 
+                    path="/reviews/:userId" 
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <ReviewsPage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  {/* Админ маршруты - только для админов */}
+                  <Route 
+                    path="/admin/*" 
+                    element={
+                      <ProtectedRoute requireAuth requireAdmin>
+                        <AdminPage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  {/* Fallback route */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
+            </main>
+            
+            {/* Глобальная кнопка ассистента */}
+            <GlobalVoiceButton />
+          </div>
+        </GlobalVoiceProvider>
       </Router>
     </ThemeProvider>
   );

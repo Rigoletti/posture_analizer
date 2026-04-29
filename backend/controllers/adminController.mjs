@@ -844,19 +844,30 @@ export const getRecommendationsStats = async (req, res) => {
   }
 };
 
+// ПОЛУЧЕНИЕ РЕАЛЬНЫХ ДАННЫХ ДЛЯ ГРАФИКОВ
 export const getAnalyticsData = async (req, res) => {
   try {
     const { period = 'week' } = req.query;
     
     let startDate = new Date();
+    let daysCount = 7;
+    let groupFormat = "%Y-%m-%d";
+    let dateField = "$createdAt";
+    
     if (period === 'week') {
       startDate.setDate(startDate.getDate() - 7);
+      daysCount = 7;
     } else if (period === 'month') {
       startDate.setMonth(startDate.getMonth() - 1);
+      daysCount = 30;
     } else if (period === 'year') {
       startDate.setFullYear(startDate.getFullYear() - 1);
+      daysCount = 12;
+      groupFormat = "%Y-%m";
+      dateField = "$createdAt";
     }
     
+    // 1. РЕАЛЬНЫЕ данные по пользователям по дням
     const userTimeline = await User.aggregate([
       {
         $match: {
@@ -866,7 +877,7 @@ export const getAnalyticsData = async (req, res) => {
       {
         $group: {
           _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+            $dateToString: { format: groupFormat, date: "$createdAt" }
           },
           count: { $sum: 1 }
         }
@@ -874,6 +885,7 @@ export const getAnalyticsData = async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
     
+    // 2. РЕАЛЬНЫЕ данные по сессиям
     const sessionTimeline = await Session.aggregate([
       {
         $match: {
@@ -884,7 +896,7 @@ export const getAnalyticsData = async (req, res) => {
       {
         $group: {
           _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$startTime" }
+            $dateToString: { format: groupFormat, date: "$startTime" }
           },
           sessions: { $sum: 1 },
           avgScore: { $avg: "$postureMetrics.postureScore" },
@@ -894,10 +906,15 @@ export const getAnalyticsData = async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
     
+    // 3. РЕАЛЬНЫЕ данные по активности по часам (за последние 30 дней)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
     const hourlyActivity = await Session.aggregate([
       {
         $match: {
-          startTime: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+          startTime: { $gte: thirtyDaysAgo },
+          status: 'completed'
         }
       },
       {
@@ -909,42 +926,127 @@ export const getAnalyticsData = async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
     
-    const daysOfWeek = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-    const timelineData = daysOfWeek.map((day, index) => {
-      const userData = userTimeline[index] || { count: 0 };
-      const sessionData = sessionTimeline[index] || { sessions: 0, avgScore: 0, totalDuration: 0 };
-      return {
-        date: day,
-        users: userData.count || Math.floor(Math.random() * 500) + 1000,
-        sessions: sessionData.sessions || Math.floor(Math.random() * 200) + 100,
-        avgScore: Math.round(sessionData.avgScore || Math.random() * 30 + 70)
-      };
-    });
-    
-    const userActivity = Array.from({ length: 24 }, (_, i) => {
+    // Заполняем все часы (0-23)
+    const userActivity = [];
+    for (let i = 0; i < 24; i++) {
       const hourData = hourlyActivity.find(h => h._id === i);
-      return {
+      userActivity.push({
         hour: i,
-        activeUsers: hourData?.activeUsers || Math.floor(Math.random() * 600) + (i > 8 && i < 22 ? 300 : 50)
-      };
-    });
+        activeUsers: hourData?.activeUsers || 0
+      });
+    }
     
-    const topExercisesData = [
-      { name: 'Растяжка спины', count: 234, duration: 45 },
-      { name: 'Упражнения для осанки', count: 189, duration: 38 },
-      { name: 'Кардио тренировка', count: 167, duration: 52 },
-      { name: 'Силовой комплекс', count: 145, duration: 48 },
-      { name: 'Йога для начинающих', count: 123, duration: 40 }
-    ];
+    // 4. РЕАЛЬНЫЕ данные по популярным упражнениям
+    // Получаем статистику выполнения упражнений из сессий
+    const popularExercisesAgg = await Session.aggregate([
+      {
+        $match: {
+          startTime: { $gte: startDate },
+          status: 'completed'
+        }
+      },
+      {
+        $unwind: {
+          path: "$keyMoments",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $match: {
+          "keyMoments.type": "exercise_completed"
+        }
+      },
+      {
+        $group: {
+          _id: "$keyMoments.data.exerciseId",
+          count: { $sum: 1 },
+          totalDuration: { $sum: "$keyMoments.data.duration" }
+        }
+      },
+      { $sort: { count: -1 } },
+      { $limit: 5 }
+    ]);
     
-    const sessionTrends = timelineData.map(item => ({
-      date: item.date,
-      avgScore: item.avgScore,
-      totalSessions: item.sessions,
-      totalDuration: Math.floor(item.sessions * (Math.random() * 30 + 60))
-    }));
+    let topExercisesData = [];
     
+    if (popularExercisesAgg.length > 0) {
+      // Получаем названия упражнений
+      const exerciseIds = popularExercisesAgg.map(item => item._id);
+      const exercises = await Exercise.find({ _id: { $in: exerciseIds } }).select('title');
+      
+      topExercisesData = popularExercisesAgg.map(item => {
+        const exercise = exercises.find(e => e._id.toString() === item._id?.toString());
+        return {
+          name: exercise?.title || 'Неизвестное упражнение',
+          count: item.count,
+          duration: Math.round(item.totalDuration / item.count / 60) // в минутах
+        };
+      });
+    }
+    
+    // Если нет реальных данных, показываем упражнения из базы
+    if (topExercisesData.length === 0) {
+      const allExercises = await Exercise.find({ isActive: true })
+        .select('title')
+        .limit(5);
+      
+      topExercisesData = allExercises.map(ex => ({
+        name: ex.title,
+        count: 0,
+        duration: 0
+      }));
+    }
+    
+    // 5. РЕАЛЬНЫЕ данные по трендам сессий
+    const sessionTrends = [];
+    const dates = [];
+    
+    // Генерируем список дат за период
+    for (let i = 0; i < daysCount; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      let dateStr;
+      if (period === 'year') {
+        dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      } else {
+        dateStr = date.toISOString().split('T')[0];
+      }
+      dates.push(dateStr);
+    }
+    
+    // Сопоставляем реальные данные с датами
+    for (const dateStr of dates) {
+      const sessionData = sessionTimeline.find(s => s._id === dateStr);
+      const userData = userTimeline.find(u => u._id === dateStr);
+      
+      let displayDate = dateStr;
+      if (period === 'week') {
+        const date = new Date(dateStr);
+        const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+        displayDate = days[date.getDay() === 0 ? 6 : date.getDay() - 1];
+      } else if (period === 'month') {
+        displayDate = dateStr.split('-')[2] + '.' + dateStr.split('-')[1];
+      } else if (period === 'year') {
+        const months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+        const monthNum = parseInt(dateStr.split('-')[1]) - 1;
+        displayDate = months[monthNum];
+      }
+      
+      sessionTrends.push({
+        date: displayDate,
+        avgScore: Math.round(sessionData?.avgScore || 0),
+        totalSessions: sessionData?.sessions || 0,
+        totalDuration: Math.round((sessionData?.totalDuration || 0) / 60) // в минутах
+      });
+    }
+    
+    // 6. РЕАЛЬНЫЕ данные по геораспределению (из профилей пользователей)
     const geoDistribution = await User.aggregate([
+      {
+        $match: {
+          "location.city": { $exists: true, $ne: null, $ne: "" }
+        }
+      },
       {
         $group: {
           _id: "$location.city",
@@ -954,6 +1056,17 @@ export const getAnalyticsData = async (req, res) => {
       { $sort: { users: -1 } },
       { $limit: 10 }
     ]);
+    
+    // 7. РЕАЛЬНЫЕ данные для временной шкалы (пользователи и сессии)
+    const timelineData = sessionTrends.map((trend, index) => {
+      const userData = userTimeline[index];
+      return {
+        date: trend.date,
+        users: userData?.count || 0,
+        sessions: trend.totalSessions,
+        avgScore: trend.avgScore
+      };
+    });
     
     res.status(200).json({
       success: true,
@@ -973,22 +1086,26 @@ export const getAnalyticsData = async (req, res) => {
     console.error('Get analytics data error:', error);
     res.status(500).json({
       success: false,
-      error: 'Ошибка сервера при получении аналитики'
+      error: 'Ошибка сервера при получении аналитики: ' + error.message
     });
   }
 };
 
+// ПОЛУЧЕНИЕ РЕАЛЬНЫХ ДАННЫХ ПО СЕССИЯМ
 export const getSessionAnalytics = async (req, res) => {
   try {
     const { userId, period = 'month' } = req.query;
     
     let startDate = new Date();
+    let groupFormat = "%Y-%m-%d";
+    
     if (period === 'week') {
       startDate.setDate(startDate.getDate() - 7);
     } else if (period === 'month') {
       startDate.setMonth(startDate.getMonth() - 1);
     } else if (period === 'year') {
       startDate.setFullYear(startDate.getFullYear() - 1);
+      groupFormat = "%Y-%m";
     }
     
     const filter = {
@@ -1000,12 +1117,13 @@ export const getSessionAnalytics = async (req, res) => {
       filter.userId = userId;
     }
     
+    // РЕАЛЬНЫЕ данные по дням
     const dailyStats = await Session.aggregate([
       { $match: filter },
       {
         $group: {
           _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$startTime" }
+            $dateToString: { format: groupFormat, date: "$startTime" }
           },
           sessions: { $sum: 1 },
           avgScore: { $avg: "$postureMetrics.postureScore" },
@@ -1017,6 +1135,7 @@ export const getSessionAnalytics = async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
     
+    // РЕАЛЬНЫЕ данные по проблемным зонам
     const zoneStats = await Session.aggregate([
       { $match: filter },
       {
@@ -1029,6 +1148,7 @@ export const getSessionAnalytics = async (req, res) => {
       }
     ]);
     
+    // РЕАЛЬНАЯ общая статистика
     const overallStats = await Session.aggregate([
       { $match: filter },
       {
@@ -1061,7 +1181,7 @@ export const getSessionAnalytics = async (req, res) => {
     console.error('Get session analytics error:', error);
     res.status(500).json({
       success: false,
-      error: 'Ошибка сервера при получении аналитики сессий'
+      error: 'Ошибка сервера при получении аналитики сессий: ' + error.message
     });
   }
 };

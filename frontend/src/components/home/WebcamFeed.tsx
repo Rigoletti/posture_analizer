@@ -1,4 +1,3 @@
-// frontend/components/home/WebcamFeed.tsx - ОРИГИНАЛ С ВАШЕГО САМОГО ПЕРВОГО СООБЩЕНИЯ
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Webcam from 'react-webcam';
@@ -7,6 +6,7 @@ import * as tf from '@tensorflow/tfjs';
 import PostureNotification from '../ui/PostureNotification';
 import { VoiceIndicator } from '../ui/VoiceIndicator';
 import { useVoiceAssistant, type VoiceCommand } from '../../hooks/useVoiceAssistant';
+import { useGlobalVoice } from '../../context/GlobalVoiceContext';
 import { sessionsApi } from '../../api/sessions';
 import {
   Box,
@@ -172,6 +172,9 @@ const WebcamFeed: React.FC = () => {
       setCurrentPoseStatus('Сеанс завершен');
     }
   });
+
+  // Глобальный голосовой ассистент
+  const { registerPageCommands, speak: globalSpeak } = useGlobalVoice();
 
   // Загрузка модели
   const loadModel = useCallback(async () => {
@@ -438,6 +441,83 @@ const WebcamFeed: React.FC = () => {
   useEffect(() => {
     voiceAssistantRef.current = voiceAssistant;
   }, [voiceAssistant]);
+
+  // Регистрируем команды для глобального ассистента
+  useEffect(() => {
+    const unregister = registerPageCommands({
+      onCommand: async (command: VoiceCommand, details?: string) => {
+        console.log('🌍 Global command received on page:', command);
+        
+        switch (command) {
+          case 'check_posture':
+            if (currentIssues.length > 0) {
+              globalSpeak(`Нарушения: ${currentIssues.join(', ')}. Оценка ${getPostureScore()}%`);
+            } else {
+              globalSpeak(`Осанка в норме. Оценка ${getPostureScore()}%`);
+            }
+            break;
+          case 'start_analysis':
+            if (!isCalibrated) {
+              globalSpeak('Сначала выполните калибровку');
+            } else if (!isSessionActive) {
+              await handleStartSession();
+              globalSpeak('Анализ запущен');
+            } else {
+              globalSpeak('Анализ уже запущен');
+            }
+            break;
+          case 'stop_analysis':
+            if (isSessionActive) {
+              await handleEndSession();
+              globalSpeak('Анализ остановлен');
+            } else {
+              globalSpeak('Анализ не запущен');
+            }
+            break;
+          case 'calibrate':
+            if (!calibrationInProgress) {
+              globalSpeak('Запускаю калибровку');
+              await calibrate();
+            } else {
+              globalSpeak('Калибровка уже выполняется');
+            }
+            break;
+          case 'reset_calibration':
+            resetCalibration();
+            globalSpeak('Калибровка сброшена');
+            break;
+          case 'show_stats':
+            globalSpeak('Открываю статистику');
+            navigate('/sessions');
+            break;
+          case 'set_reminder':
+            if (details) {
+              const minutes = parseInt(details);
+              setTimeout(() => {
+                globalSpeak('Пора проверить осанку! Сделайте перерыв');
+              }, minutes * 60 * 1000);
+              globalSpeak(`Напомню через ${minutes} минут`);
+            } else {
+              globalSpeak('Скажите время в минутах');
+            }
+            break;
+          case 'recommend_exercises':
+            globalSpeak('Рекомендую упражнения для спины: сведение лопаток, кошка-корова, планка');
+            navigate('/exercises');
+            break;
+          case 'help':
+            globalSpeak('Команды: калибровка, осанка, начать анализ, стоп анализ, статистика, сброс, напомни, упражнения, помощь');
+            break;
+          case 'turn_off':
+            globalSpeak('До свидания');
+            break;
+        }
+      },
+      isActive: true,
+    });
+    
+    return unregister;
+  }, [isCalibrated, isSessionActive, currentIssues, calibrationInProgress, getPostureScore, handleStartSession, handleEndSession, calibrate, resetCalibration, navigate, registerPageCommands, globalSpeak]);
 
   // Отслеживаем изменение калибровки
   useEffect(() => {

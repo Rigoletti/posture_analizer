@@ -66,7 +66,6 @@ export const adminApi = {
       });
       
       console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
       
       if (!response.ok) {
         let errorMessage = 'Ошибка при создании упражнения';
@@ -152,6 +151,7 @@ export const adminApi = {
     }
   },
 
+  // ПОЛУЧЕНИЕ РЕАЛЬНОЙ АНАЛИТИКИ ДЛЯ ГРАФИКОВ
   getAnalytics: async (period: string = 'week') => {
     try {
       const response = await fetch(`http://localhost:5000/api/admin/analytics?period=${period}`, {
